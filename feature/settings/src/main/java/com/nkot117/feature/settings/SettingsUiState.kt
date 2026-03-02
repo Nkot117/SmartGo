@@ -51,13 +51,16 @@ sealed interface DialogEvent : SettingsUiEvent {
     data object NotificationRequiredDialogDismissed : DialogEvent
 }
 
+/**
+ * パーミッションイベント
+ */
 sealed interface PermissionEvent : SettingsUiEvent {
     data object PostNotificationsPermissionGranted : PermissionEvent
     data object PostNotificationsPermissionDenied : PermissionEvent
 }
 
 /**
- * Settings画面のUI効果を表すシールクラス
+ * Settings画面で実行する副作用を表すシールクラス
  */
 sealed class SettingsUiEffect {
     data object NavigateBack : SettingsUiEffect()
