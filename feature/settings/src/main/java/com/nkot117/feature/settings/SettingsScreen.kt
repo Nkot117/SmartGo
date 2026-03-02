@@ -9,7 +9,6 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -32,15 +31,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TimePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -60,7 +54,6 @@ import com.nkot117.core.ui.theme.Primary500
 import com.nkot117.core.ui.theme.TextMain
 import com.nkot117.core.ui.theme.TextSub
 
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 fun SettingsScreenRoute(
     contentPadding: PaddingValues,
@@ -69,37 +62,96 @@ fun SettingsScreenRoute(
     viewModel: SettingsViewModel = hiltViewModel<SettingsViewModel>()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val requestPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.onEvent(PermissionEvent.PostNotificationsPermissionGranted)
+        } else {
+            viewModel.onEvent(PermissionEvent.PostNotificationsPermissionDenied)
+        }
+    }
 
+    // メインコンテンツの表示
+    SettingsScreen(
+        contentPadding,
+        state
+    ) { viewModel.onEvent(it) }
+
+    // ダイアログの表示
+    when (state.dialog) {
+        is SettingsDialog.ReminderTimePicker -> {
+            NotificationTimePickerDialog(
+                onEvent = { viewModel.onEvent(it) },
+                settingHour = state.reminder.hour,
+                settingMinute = state.reminder.minute
+            )
+        }
+
+        is SettingsDialog.NotificationRequiredDialog -> {
+            PermissionDialog(
+                onEvent = viewModel::onEvent
+            )
+        }
+
+        else -> {
+            // No dialog to show
+        }
+    }
+
+    // 副作用
     LaunchedEffect(Unit) {
+        // 画面表示時にリマインダー設定をロードし、UIを初期化する
         viewModel.fetchReminderSettings()
     }
 
-    SettingsScreen(
-        contentPadding,
-        state,
-        actions = SettingsActions(
-            onBack = onBack,
-            onTapOssLicenses = onTapOssLicenses,
-            onToggleReminder = viewModel::setReminderEnabled,
-            onChangeReminderTime = viewModel::setReminderTime,
-            onSettingSave = viewModel::saveSettings
-        )
-    )
+    LaunchedEffect(Unit) {
+        viewModel.uiEffect.collect { effect ->
+            when (effect) {
+                SettingsUiEffect.NavigateBack -> onBack()
+
+                SettingsUiEffect.OpenOssLicenses -> onTapOssLicenses()
+
+                SettingsUiEffect.OpenNotificationSettings -> openNotificationSettings(
+                    context
+                )
+
+                SettingsUiEffect.RequestPostNotificationsPermission -> {
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                        // Android 13未満は通知権限の許諾は不要なため、許可されたものとして扱う
+                        viewModel.onEvent(PermissionEvent.PostNotificationsPermissionGranted)
+                        return@collect
+                    }
+
+                    val hasPermission = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ) == PackageManager.PERMISSION_GRANTED
+
+                    if (hasPermission) {
+                        viewModel.onEvent(PermissionEvent.PostNotificationsPermissionGranted)
+                        return@collect
+                    } else {
+                        requestPermission.launch(
+                            Manifest.permission.POST_NOTIFICATIONS
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     contentPadding: PaddingValues,
     state: SettingsUiState,
-    actions: SettingsActions
+    onEvent: (SettingsUiEvent) -> Unit
 ) {
-    val context = LocalContext.current
     val topColor = BgWorkdayTop
     val bottomColor = BgWorkdayBottom
-    var showTimePicker by rememberSaveable { mutableStateOf(false) }
-    var showPermissionDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -117,62 +169,24 @@ fun SettingsScreen(
         ) {
             ReminderSettingsCard(
                 reminderSettings = state.reminder,
-                onToggle = { isEnabled ->
-                    actions.onToggleReminder(isEnabled)
-                },
-                onTimeClick = {
-                    showTimePicker = true
-                },
-                onSave = {
-                    actions.onSettingSave()
-                    actions.onBack()
-                },
-                onShowPermissionDialogChange = { show ->
-                    showPermissionDialog = show
-                }
+                onEvent = onEvent
             )
 
             Spacer(Modifier.height(12.dp))
 
             OssLicensesCard(
-                onTapOssLicenses = {
-                    actions.onTapOssLicenses()
-                }
+                onEvent = onEvent
             )
         }
-    }
-
-    if (showTimePicker) {
-        val timePickerState = rememberTimePickerState(
-            initialHour = state.reminder.hour,
-            initialMinute = state.reminder.minute,
-            is24Hour = true
-        )
-
-        NotificationTimePickerDialog(
-            timePickerState = timePickerState,
-            onConfirm = {
-                actions.onChangeReminderTime(timePickerState.hour, timePickerState.minute)
-                showTimePicker = false
-            },
-            onDismiss = { showTimePicker = false }
-        )
-    }
-
-    if (showPermissionDialog) {
-        PermissionDialog(
-            context = context,
-            onDismiss = { show ->
-                showPermissionDialog = show
-            }
-        )
     }
 }
 
 @Composable
-private fun PermissionDialog(context: Context, onDismiss: (Boolean) -> Unit) {
+private fun PermissionDialog(onEvent: (SettingsUiEvent) -> Unit) {
     AlertDialog(
-        onDismissRequest = { onDismiss(false) },
+        onDismissRequest = {
+            onEvent(DialogEvent.NotificationRequiredDialogDismissed)
+        },
         title = {
             Text("通知の許可が必要です")
         },
@@ -182,41 +196,24 @@ private fun PermissionDialog(context: Context, onDismiss: (Boolean) -> Unit) {
         confirmButton = {
             PrimaryButton(
                 onClick = {
-                    openNotificationSettings(context)
-                    onDismiss(false)
+                    onEvent(DialogEvent.NotificationRequiredDialogConfirmed)
                 },
                 text = "設定を開く"
             )
         },
         dismissButton = {
             SecondaryButton(
-                onClick = { onDismiss(false) },
+                onClick = {
+                    onEvent(DialogEvent.NotificationRequiredDialogDismissed)
+                },
                 text = "キャンセル"
             )
         }
     )
 }
 
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
-private fun ReminderSettingsCard(
-    reminderSettings: Reminder,
-    onToggle: (Boolean) -> Unit,
-    onTimeClick: () -> Unit,
-    onSave: () -> Unit,
-    onShowPermissionDialogChange: (Boolean) -> Unit
-) {
-    val context = LocalContext.current
-    val requestPermission = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            onSave()
-        } else {
-            onShowPermissionDialogChange(true)
-        }
-    }
-
+private fun ReminderSettingsCard(reminderSettings: Reminder, onEvent: (SettingsUiEvent) -> Unit) {
     Text(
         "外出前リマインダー設定",
         style = MaterialTheme.typography.titleSmall,
@@ -230,7 +227,12 @@ private fun ReminderSettingsCard(
         colors = cardColors(containerColor = Color.White)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            ReminderToggleRow(reminderSettings.enabled, onToggle)
+            ReminderToggleRow(
+                reminderSettings.enabled
+            ) { enabled ->
+                onEvent(ReminderEvent.ReminderToggled(enabled))
+            }
+
             if (reminderSettings.enabled) {
                 Spacer(Modifier.height(16.dp))
                 Box(
@@ -240,26 +242,16 @@ private fun ReminderSettingsCard(
                         .background(Color.LightGray)
                 )
                 Spacer(Modifier.height(16.dp))
-                NotificationTimeRow(onTimeClick, reminderSettings.hour, reminderSettings.minute)
+                NotificationTimeRow(
+                    { onEvent(ClickEvent.TimeClicked) },
+                    reminderSettings.hour,
+                    reminderSettings.minute
+                )
             }
             Spacer(Modifier.height(16.dp))
             PrimaryButton(
                 onClick = {
-                    if (reminderSettings.enabled) {
-                        val hasPermission =
-                            ContextCompat.checkSelfPermission(
-                                context,
-                                Manifest.permission.POST_NOTIFICATIONS
-                            ) == PackageManager.PERMISSION_GRANTED
-
-                        if (hasPermission) {
-                            onSave()
-                        } else {
-                            requestPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }
-                    } else {
-                        onSave()
-                    }
+                    onEvent(ClickEvent.SaveClicked)
                 },
                 modifier = Modifier.align(Alignment.CenterHorizontally),
                 text = "保存する"
@@ -269,7 +261,7 @@ private fun ReminderSettingsCard(
 }
 
 @Composable
-private fun OssLicensesCard(onTapOssLicenses: () -> Unit) {
+private fun OssLicensesCard(onEvent: (SettingsUiEvent) -> Unit) {
     Text(
         "その他",
         style = MaterialTheme.typography.titleSmall,
@@ -281,7 +273,9 @@ private fun OssLicensesCard(onTapOssLicenses: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onTapOssLicenses() },
+            .clickable {
+                onEvent(ClickEvent.OssLicensesClicked)
+            },
         colors = cardColors(containerColor = Color.White)
     ) {
         Row(
@@ -304,7 +298,7 @@ private fun OssLicensesCard(onTapOssLicenses: () -> Unit) {
 }
 
 @Composable
-private fun ReminderToggleRow(isEnabled: Boolean, onToggle: (Boolean) -> Unit) {
+private fun ReminderToggleRow(isEnabled: Boolean, toggled: (Boolean) -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -317,7 +311,9 @@ private fun ReminderToggleRow(isEnabled: Boolean, onToggle: (Boolean) -> Unit) {
         )
         Switch(
             checked = isEnabled,
-            onCheckedChange = onToggle,
+            onCheckedChange = {
+                toggled(it)
+            },
             colors = SwitchDefaults.colors(
                 checkedTrackColor = Primary500
             )
@@ -327,12 +323,14 @@ private fun ReminderToggleRow(isEnabled: Boolean, onToggle: (Boolean) -> Unit) {
 
 @SuppressLint("DefaultLocale")
 @Composable
-private fun NotificationTimeRow(onTimeClick: () -> Unit, settingHour: Int, settingMinute: Int) {
+private fun NotificationTimeRow(timeClicked: () -> Unit, settingHour: Int, settingMinute: Int) {
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onTimeClick() },
+                .clickable {
+                    timeClicked()
+                },
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -364,35 +362,51 @@ private fun NotificationTimeRow(onTimeClick: () -> Unit, settingHour: Int, setti
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationTimePickerDialog(
-    timePickerState: TimePickerState,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onEvent: (SettingsUiEvent) -> Unit,
+    settingHour: Int,
+    settingMinute: Int
 ) {
+    val timePickerState = rememberTimePickerState(
+        initialHour = settingHour,
+        initialMinute = settingMinute,
+        is24Hour = true
+    )
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            onEvent(ReminderEvent.ReminderTimePickerDismissed)
+        },
         title = { Text("通知時刻を選択") },
         text = { TimePicker(state = timePickerState) },
         confirmButton = {
-            Button(onClick = onConfirm) {
+            Button(onClick = {
+                onEvent(
+                    ReminderEvent.ReminderTimePickerConfirmed(
+                        timePickerState.hour,
+                        timePickerState.minute
+                    )
+                )
+            }) {
                 Text("確定")
             }
         },
         dismissButton = {
-            Button(onClick = onDismiss) {
+            Button(onClick = {
+                onEvent(ReminderEvent.ReminderTimePickerDismissed)
+            }) {
                 Text("キャンセル")
             }
         }
     )
 }
 
-fun openNotificationSettings(context: Context) {
+private fun openNotificationSettings(context: Context) {
     val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
         putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
     }
     context.startActivity(intent)
 }
 
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Preview(showBackground = true)
 @Composable
 fun SettingsScreenPreview() {
@@ -400,7 +414,7 @@ fun SettingsScreenPreview() {
         SettingsScreen(
             contentPadding = PaddingValues(0.dp),
             state = SettingsUiState(),
-            actions = SettingsActions()
+            onEvent = {}
         )
     }
 }
