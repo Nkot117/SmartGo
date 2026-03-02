@@ -2,6 +2,7 @@ package com.nkot117.feature.settings
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -90,7 +91,13 @@ fun SettingsScreenRoute(
         }
 
         is SettingsDialog.NotificationRequiredDialog -> {
-            PermissionDialog(
+            NotificationRequiredDialog(
+                onEvent = viewModel::onEvent
+            )
+        }
+
+        is SettingsDialog.ExactAlarmRequiredDialog -> {
+            ExactAlarmRequiredDialog(
                 onEvent = viewModel::onEvent
             )
         }
@@ -138,6 +145,17 @@ fun SettingsScreenRoute(
                         )
                     }
                 }
+
+                SettingsUiEffect.RequestExactAlarmPermission -> {
+                    val hasExactAlarmPermission = checkExactAlarmPermission(context)
+                    if (hasExactAlarmPermission) {
+                        viewModel.onEvent(PermissionEvent.ExactAlarmPermissionGranted)
+                    } else {
+                        viewModel.onEvent(PermissionEvent.ExactAlarmPermissionDenied)
+                    }
+                }
+
+                SettingsUiEffect.OpenExactAlarmSettings -> openExactAlarmSettings(context)
             }
         }
     }
@@ -182,7 +200,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun PermissionDialog(onEvent: (SettingsUiEvent) -> Unit) {
+private fun NotificationRequiredDialog(onEvent: (SettingsUiEvent) -> Unit) {
     AlertDialog(
         onDismissRequest = {
             onEvent(DialogEvent.NotificationRequiredDialogDismissed)
@@ -205,6 +223,37 @@ private fun PermissionDialog(onEvent: (SettingsUiEvent) -> Unit) {
             SecondaryButton(
                 onClick = {
                     onEvent(DialogEvent.NotificationRequiredDialogDismissed)
+                },
+                text = "キャンセル"
+            )
+        }
+    )
+}
+
+@Composable
+private fun ExactAlarmRequiredDialog(onEvent: (SettingsUiEvent) -> Unit) {
+    AlertDialog(
+        onDismissRequest = {
+            onEvent(DialogEvent.ExactAlarmRequiredDialogDismissed)
+        },
+        title = {
+            Text("アラームの許可が必要です")
+        },
+        text = {
+            Text("リマインダー通知を受け取るには、設定画面でアラームを許可してください。")
+        },
+        confirmButton = {
+            PrimaryButton(
+                onClick = {
+                    onEvent(DialogEvent.ExactAlarmRequiredDialogConfirmed)
+                },
+                text = "設定を開く"
+            )
+        },
+        dismissButton = {
+            SecondaryButton(
+                onClick = {
+                    onEvent(DialogEvent.ExactAlarmRequiredDialogDismissed)
                 },
                 text = "キャンセル"
             )
@@ -405,6 +454,25 @@ private fun openNotificationSettings(context: Context) {
         putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
     }
     context.startActivity(intent)
+}
+
+private fun openExactAlarmSettings(context: Context) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        return
+    }
+
+    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+    context.startActivity(intent)
+}
+
+private fun checkExactAlarmPermission(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        // Android 12未満は正確なアラームの権限は存在しないため、常に許可されているものとする
+        return true
+    }
+
+    val alarmManager = context.getSystemService(AlarmManager::class.java)
+    return alarmManager.canScheduleExactAlarms()
 }
 
 @Preview(showBackground = true)
