@@ -34,8 +34,10 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        val permissionGranted = isNotificationPermissionGranted(this)
+        val hasNotificationPermission = isNotificationPermissionGranted(this)
+        val hasExactAlarmPermission = isExactAlarmPermissionGranted(this)
 
+        val permissionGranted = hasNotificationPermission && hasExactAlarmPermission
         lifecycleScope.launch {
             syncReminderPermissionOnAppStartUseCase(permissionGranted)
         }
@@ -48,6 +50,15 @@ fun isNotificationPermissionGranted(context: Context): Boolean =
             context,
             Manifest.permission.POST_NOTIFICATIONS
         ) == PackageManager.PERMISSION_GRANTED
+    } else {
+        true
+    }
+
+fun isExactAlarmPermissionGranted(context: Context): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val alarmManager =
+            context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        alarmManager.canScheduleExactAlarms()
     } else {
         true
     }

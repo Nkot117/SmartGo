@@ -1,14 +1,6 @@
 package com.nkot117.feature.settings
 
-import android.Manifest
 import android.annotation.SuppressLint
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
-import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -33,21 +25,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nkot117.core.domain.model.Reminder
 import com.nkot117.core.ui.components.PrimaryButton
-import com.nkot117.core.ui.components.SecondaryButton
 import com.nkot117.core.ui.theme.BgWorkdayBottom
 import com.nkot117.core.ui.theme.BgWorkdayTop
 import com.nkot117.core.ui.theme.Primary500
@@ -62,17 +50,6 @@ fun SettingsScreenRoute(
     viewModel: SettingsViewModel = hiltViewModel<SettingsViewModel>()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val requestPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            viewModel.onEvent(PermissionEvent.PostNotificationsPermissionGranted)
-        } else {
-            viewModel.onEvent(PermissionEvent.PostNotificationsPermissionDenied)
-        }
-    }
-
     // メインコンテンツの表示
     SettingsScreen(
         contentPadding,
@@ -80,67 +57,17 @@ fun SettingsScreenRoute(
     ) { viewModel.onEvent(it) }
 
     // ダイアログの表示
-    when (state.dialog) {
-        is SettingsDialog.ReminderTimePicker -> {
-            NotificationTimePickerDialog(
-                onEvent = { viewModel.onEvent(it) },
-                settingHour = state.reminder.hour,
-                settingMinute = state.reminder.minute
-            )
-        }
-
-        is SettingsDialog.NotificationRequiredDialog -> {
-            PermissionDialog(
-                onEvent = viewModel::onEvent
-            )
-        }
-
-        else -> {
-            // No dialog to show
-        }
-    }
+    SettingsDialogs(
+        state = state,
+        onEvent = { viewModel.onEvent(it) }
+    )
 
     // 副作用
-    LaunchedEffect(Unit) {
-        // 画面表示時にリマインダー設定をロードし、UIを初期化する
-        viewModel.fetchReminderSettings()
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.uiEffect.collect { effect ->
-            when (effect) {
-                SettingsUiEffect.NavigateBack -> onBack()
-
-                SettingsUiEffect.OpenOssLicenses -> onTapOssLicenses()
-
-                SettingsUiEffect.OpenNotificationSettings -> openNotificationSettings(
-                    context
-                )
-
-                SettingsUiEffect.RequestPostNotificationsPermission -> {
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                        // Android 13未満は通知権限の許諾は不要なため、許可されたものとして扱う
-                        viewModel.onEvent(PermissionEvent.PostNotificationsPermissionGranted)
-                        return@collect
-                    }
-
-                    val hasPermission = ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.POST_NOTIFICATIONS
-                    ) == PackageManager.PERMISSION_GRANTED
-
-                    if (hasPermission) {
-                        viewModel.onEvent(PermissionEvent.PostNotificationsPermissionGranted)
-                        return@collect
-                    } else {
-                        requestPermission.launch(
-                            Manifest.permission.POST_NOTIFICATIONS
-                        )
-                    }
-                }
-            }
-        }
-    }
+    SettingsEffects(
+        viewModel = viewModel,
+        onBack = onBack,
+        onTapOssLicenses = onTapOssLicenses
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -179,37 +106,6 @@ fun SettingsScreen(
             )
         }
     }
-}
-
-@Composable
-private fun PermissionDialog(onEvent: (SettingsUiEvent) -> Unit) {
-    AlertDialog(
-        onDismissRequest = {
-            onEvent(DialogEvent.NotificationRequiredDialogDismissed)
-        },
-        title = {
-            Text("通知の許可が必要です")
-        },
-        text = {
-            Text("リマインダー通知を受け取るには、設定画面で通知を許可してください。")
-        },
-        confirmButton = {
-            PrimaryButton(
-                onClick = {
-                    onEvent(DialogEvent.NotificationRequiredDialogConfirmed)
-                },
-                text = "設定を開く"
-            )
-        },
-        dismissButton = {
-            SecondaryButton(
-                onClick = {
-                    onEvent(DialogEvent.NotificationRequiredDialogDismissed)
-                },
-                text = "キャンセル"
-            )
-        }
-    )
 }
 
 @Composable
@@ -398,13 +294,6 @@ fun NotificationTimePickerDialog(
             }
         }
     )
-}
-
-private fun openNotificationSettings(context: Context) {
-    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-    }
-    context.startActivity(intent)
 }
 
 @Preview(showBackground = true)

@@ -36,6 +36,16 @@ class SettingsViewModel @Inject constructor(
 
     fun onEvent(event: SettingsUiEvent) {
         when (event) {
+            is ClickEvent -> clickEvent(event)
+            is ReminderEvent -> reminderEvent(event)
+            is PermissionEvent -> permissionEvent(event)
+            is DialogEvent -> dialogEvent(event)
+        }
+    }
+
+    private fun clickEvent(event: ClickEvent) {
+        when (event) {
+            // クリックイベント
             is ClickEvent.BackClicked -> viewModelScope.launch {
                 emitEffect(SettingsUiEffect.NavigateBack)
             }
@@ -59,7 +69,11 @@ class SettingsViewModel @Inject constructor(
                 // リマインダー設定が有効になっている場合は、通知権限の確認を行う
                 emitEffect(SettingsUiEffect.RequestPostNotificationsPermission)
             }
+        }
+    }
 
+    private fun reminderEvent(event: ReminderEvent) {
+        when (event) {
             is ReminderEvent.ReminderToggled -> setReminderEnabled(event.enabled)
 
             is ReminderEvent.ReminderTimePickerConfirmed -> {
@@ -72,19 +86,42 @@ class SettingsViewModel @Inject constructor(
                     dialog = null
                 )
             }
+        }
+    }
 
-            is PermissionEvent.PostNotificationsPermissionGranted -> {
-                viewModelScope.launch {
-                    saveSettings()
-                    _uiState.update { it.copy(dialog = null) }
-                    emitEffect(SettingsUiEffect.NavigateBack)
+    private fun permissionEvent(event: PermissionEvent) {
+        when (event) {
+            is PermissionEvent.PostNotifications -> {
+                if (event.granted) {
+                    viewModelScope.launch {
+                        emitEffect(
+                            SettingsUiEffect.RequestExactAlarmPermission
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(dialog = SettingsDialog.NotificationRequiredDialog)
+                    }
                 }
             }
 
-            is PermissionEvent.PostNotificationsPermissionDenied -> _uiState.update {
-                it.copy(dialog = SettingsDialog.NotificationRequiredDialog)
+            is PermissionEvent.ExactAlarm -> {
+                if (event.granted) {
+                    viewModelScope.launch {
+                        saveSettings()
+                        emitEffect(SettingsUiEffect.NavigateBack)
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(dialog = SettingsDialog.ExactAlarmRequiredDialog)
+                    }
+                }
             }
+        }
+    }
 
+    private fun dialogEvent(event: DialogEvent) {
+        when (event) {
             is DialogEvent.NotificationRequiredDialogDismissed -> _uiState.update {
                 it.copy(
                     dialog = null
@@ -96,6 +133,20 @@ class SettingsViewModel @Inject constructor(
                 viewModelScope.launch {
                     _uiState.update { it.copy(dialog = null) }
                     emitEffect(SettingsUiEffect.OpenNotificationSettings)
+                }
+            }
+
+            DialogEvent.ExactAlarmRequiredDialogConfirmed ->
+                viewModelScope.launch {
+                    _uiState.update { it.copy(dialog = null) }
+                    emitEffect(SettingsUiEffect.OpenExactAlarmSettings)
+                }
+
+            DialogEvent.ExactAlarmRequiredDialogDismissed -> {
+                _uiState.update {
+                    it.copy(
+                        dialog = null
+                    )
                 }
             }
         }

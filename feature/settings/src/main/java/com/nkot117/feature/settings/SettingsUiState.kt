@@ -17,6 +17,7 @@ data class SettingsUiState(
 sealed interface SettingsDialog {
     data object ReminderTimePicker : SettingsDialog
     data object NotificationRequiredDialog : SettingsDialog
+    data object ExactAlarmRequiredDialog : SettingsDialog
 }
 
 /**
@@ -49,14 +50,16 @@ sealed interface ReminderEvent : SettingsUiEvent {
 sealed interface DialogEvent : SettingsUiEvent {
     data object NotificationRequiredDialogConfirmed : DialogEvent
     data object NotificationRequiredDialogDismissed : DialogEvent
+    data object ExactAlarmRequiredDialogConfirmed : DialogEvent
+    data object ExactAlarmRequiredDialogDismissed : DialogEvent
 }
 
 /**
  * パーミッションイベント
  */
 sealed interface PermissionEvent : SettingsUiEvent {
-    data object PostNotificationsPermissionGranted : PermissionEvent
-    data object PostNotificationsPermissionDenied : PermissionEvent
+    data class PostNotifications(val granted: Boolean) : PermissionEvent
+    data class ExactAlarm(val granted: Boolean) : PermissionEvent
 }
 
 /**
@@ -66,5 +69,7 @@ sealed class SettingsUiEffect {
     data object NavigateBack : SettingsUiEffect()
     data object OpenOssLicenses : SettingsUiEffect()
     data object OpenNotificationSettings : SettingsUiEffect()
+    data object OpenExactAlarmSettings : SettingsUiEffect()
     data object RequestPostNotificationsPermission : SettingsUiEffect()
+    data object RequestExactAlarmPermission : SettingsUiEffect()
 }
