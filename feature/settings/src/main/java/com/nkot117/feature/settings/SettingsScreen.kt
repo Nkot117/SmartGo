@@ -68,9 +68,9 @@ fun SettingsScreenRoute(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            viewModel.onEvent(PermissionEvent.PostNotificationsPermissionGranted)
+            viewModel.onEvent(PermissionEvent.PostNotifications(granted = true))
         } else {
-            viewModel.onEvent(PermissionEvent.PostNotificationsPermissionDenied)
+            viewModel.onEvent(PermissionEvent.PostNotifications(granted = false))
         }
     }
 
@@ -127,7 +127,7 @@ fun SettingsScreenRoute(
                 SettingsUiEffect.RequestPostNotificationsPermission -> {
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                         // Android 13未満は通知権限の許諾は不要なため、許可されたものとして扱う
-                        viewModel.onEvent(PermissionEvent.PostNotificationsPermissionGranted)
+                        viewModel.onEvent(PermissionEvent.PostNotifications(granted = true))
                         return@collect
                     }
 
@@ -137,7 +137,7 @@ fun SettingsScreenRoute(
                     ) == PackageManager.PERMISSION_GRANTED
 
                     if (hasPermission) {
-                        viewModel.onEvent(PermissionEvent.PostNotificationsPermissionGranted)
+                        viewModel.onEvent(PermissionEvent.PostNotifications(granted = true))
                         return@collect
                     } else {
                         requestPermission.launch(
@@ -149,9 +149,9 @@ fun SettingsScreenRoute(
                 SettingsUiEffect.RequestExactAlarmPermission -> {
                     val hasExactAlarmPermission = checkExactAlarmPermission(context)
                     if (hasExactAlarmPermission) {
-                        viewModel.onEvent(PermissionEvent.ExactAlarmPermissionGranted)
+                        viewModel.onEvent(PermissionEvent.ExactAlarm(granted = true))
                     } else {
-                        viewModel.onEvent(PermissionEvent.ExactAlarmPermissionDenied)
+                        viewModel.onEvent(PermissionEvent.ExactAlarm(granted = false))
                     }
                 }
 
