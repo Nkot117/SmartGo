@@ -19,8 +19,6 @@ import androidx.compose.material3.CardDefaults.cardColors
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
@@ -35,8 +33,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nkot117.core.domain.model.Reminder
 import com.nkot117.core.ui.components.PrimaryButton
+import com.nkot117.core.ui.components.SwitchCard
 import com.nkot117.core.ui.theme.BackgroundColor
-import com.nkot117.core.ui.theme.Primary500
 import com.nkot117.core.ui.theme.TextMain
 import com.nkot117.core.ui.theme.TextSub
 
@@ -94,6 +92,13 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(12.dp))
 
+            AutoWeatherSettingCard(
+                autoWeatherSettings = state.autoWeatherSettings,
+                onEvent = onEvent
+            )
+
+            Spacer(Modifier.height(12.dp))
+
             OssLicensesCard(
                 onEvent = onEvent
             )
@@ -115,12 +120,14 @@ private fun ReminderSettingsCard(reminderSettings: Reminder, onEvent: (SettingsU
         modifier = Modifier.fillMaxWidth(),
         colors = cardColors(containerColor = Color.White)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            ReminderToggleRow(
-                reminderSettings.enabled
-            ) { enabled ->
-                onEvent(ReminderEvent.ReminderToggled(enabled))
-            }
+        Column {
+            SwitchCard(
+                "外出前リマインダー",
+                reminderSettings.enabled,
+                { enabled ->
+                    onEvent(ReminderEvent.ReminderToggled(enabled))
+                }
+            )
 
             if (reminderSettings.enabled) {
                 Spacer(Modifier.height(16.dp))
@@ -142,11 +149,33 @@ private fun ReminderSettingsCard(reminderSettings: Reminder, onEvent: (SettingsU
                 onClick = {
                     onEvent(ClickEvent.SaveClicked)
                 },
-                modifier = Modifier.align(Alignment.CenterHorizontally),
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp),
                 text = "保存する"
             )
         }
     }
+}
+
+@Composable
+private fun AutoWeatherSettingCard(
+    autoWeatherSettings: Boolean,
+    onEvent: (SettingsUiEvent) -> Unit
+) {
+    Text(
+        "天気の自動設定",
+        style = MaterialTheme.typography.titleSmall,
+        color = TextMain
+    )
+
+    Spacer(Modifier.height(8.dp))
+
+    SwitchCard(
+        text = "現在地の天気を自動で設定する",
+        checked = autoWeatherSettings,
+        onCheckedChange = {
+            onEvent(AutoWeatherSettingsEvent.AutoWeatherToggled(it))
+        }
+    )
 }
 
 @Composable
@@ -186,34 +215,12 @@ private fun OssLicensesCard(onEvent: (SettingsUiEvent) -> Unit) {
     }
 }
 
-@Composable
-private fun ReminderToggleRow(isEnabled: Boolean, toggled: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            "外出前リマインダー",
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.labelLarge,
-            color = TextMain
-        )
-        Switch(
-            checked = isEnabled,
-            onCheckedChange = {
-                toggled(it)
-            },
-            colors = SwitchDefaults.colors(
-                checkedTrackColor = Primary500
-            )
-        )
-    }
-}
-
 @SuppressLint("DefaultLocale")
 @Composable
 private fun NotificationTimeRow(timeClicked: () -> Unit, settingHour: Int, settingMinute: Int) {
-    Column {
+    Column(
+        modifier = Modifier.padding(horizontal = 16.dp)
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -289,9 +296,9 @@ fun NotificationTimePickerDialog(
     )
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, name = "Remainder Off")
 @Composable
-fun SettingsScreenPreview() {
+fun SettingsScreenPreview_Remainder_Off() {
     Surface {
         SettingsScreen(
             contentPadding = PaddingValues(0.dp),
@@ -300,3 +307,18 @@ fun SettingsScreenPreview() {
         )
     }
 }
+
+@Preview(showBackground = true, name = "Remainder On")
+@Composable
+fun SettingsScreenPreview_Remainder_On() {
+    Surface {
+        SettingsScreen(
+            contentPadding = PaddingValues(0.dp),
+            state = SettingsUiState(reminder = Reminder(HOUR, MINUTE, true)),
+            onEvent = {}
+        )
+    }
+}
+
+private const val HOUR = 9
+private const val MINUTE = 0

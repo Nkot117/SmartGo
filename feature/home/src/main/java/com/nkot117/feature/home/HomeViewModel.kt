@@ -2,12 +2,17 @@ package com.nkot117.feature.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.github.michaelbull.result.onErr
+import com.github.michaelbull.result.onOk
 import com.nkot117.core.common.toLocalDate
 import com.nkot117.core.domain.model.DayType
 import com.nkot117.core.domain.model.WeatherType
 import com.nkot117.core.domain.usecase.dailynote.GetDailyNoteUseCase
 import com.nkot117.core.domain.usecase.dailynote.SaveDailyNoteUseCase
 import com.nkot117.core.domain.usecase.items.GetItemsToBringUseCase
+import com.nkot117.core.domain.usecase.weather.GetAutoWeatherSettingsUseCase
+import com.nkot117.core.domain.usecase.weather.GetCurrentLocationDailyWeatherTypeUseCase
+import com.nkot117.core.domain.usecase.weather.toWeatherType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.collections.immutable.toImmutableList
@@ -17,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -27,7 +33,9 @@ import kotlinx.coroutines.launch
 class HomeViewModel @Inject constructor(
     private val getItemsToBringUseCase: GetItemsToBringUseCase,
     private val getDailyNoteUseCase: GetDailyNoteUseCase,
-    private val saveDailyNoteUseCase: SaveDailyNoteUseCase
+    private val saveDailyNoteUseCase: SaveDailyNoteUseCase,
+    private val getAutoWeatherSettingsUseCase: GetAutoWeatherSettingsUseCase,
+    private val getCurrentLocationDailyWeatherTypeUseCase: GetCurrentLocationDailyWeatherTypeUseCase
 ) : ViewModel() {
     /**
      * UiState
@@ -40,6 +48,12 @@ class HomeViewModel @Inject constructor(
      */
     private val _uiEffect = MutableSharedFlow<HomeUiEffect>()
     val uiEffect = _uiEffect.asSharedFlow()
+
+    init {
+        observeDailyNote()
+        observeChecklist()
+        fetchCurrentWeatherIfNeeded()
+    }
 
     fun onEvent(event: HomeUiEvent) {
         when (event) {
@@ -86,27 +100,33 @@ class HomeViewModel @Inject constructor(
             }
 
             DialogEvent.CalendarDialogDismissed,
-            DialogEvent.DailyNoteEditDialogDismissed
+            DialogEvent.DailyNoteEditDialogDismissed,
+            DialogEvent.AutoWeatherSettingsErrorDialogDismissed
             -> _uiState.update {
                 it.copy(dialog = null)
             }
         }
     }
 
-    fun getChecklist() {
+    private fun observeChecklist() {
         viewModelScope.launch {
-            val state = uiState.value
-            val items = getItemsToBringUseCase(
-                dayType = state.dayType,
-                weatherType = state.weatherType,
-                date = state.date
-            )
-            _uiState.update { it.copy(preview = items.toImmutableList()) }
+            uiState
+                .map { Triple(it.dayType, it.weatherType, it.date) }
+                .distinctUntilChanged()
+                .collectLatest {
+                    val (dayType, weatherType, date) = it
+                    val items = getItemsToBringUseCase(
+                        dayType = dayType,
+                        weatherType = weatherType,
+                        date = date
+                    )
+                    _uiState.update { state -> state.copy(preview = items.toImmutableList()) }
+                }
         }
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun observeDailyNote() {
+    private fun observeDailyNote() {
         viewModelScope.launch {
             uiState
                 .map { it.date }
@@ -130,6 +150,30 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             val date = _uiState.value.date
             saveDailyNoteUseCase(date, note)
+        }
+    }
+
+    private fun fetchCurrentWeatherIfNeeded() {
+        viewModelScope.launch {
+            val autoWeatherEnabled = getAutoWeatherSettingsUseCase()
+            if (!autoWeatherEnabled) return@launch
+
+            _uiState.update { it.copy(isLoadingWeather = true) }
+            getCurrentLocationDailyWeatherTypeUseCase().onOk { dailyWeatherInfo ->
+                _uiState.update {
+                    it.copy(
+                        isLoadingWeather = false,
+                        weatherType = dailyWeatherInfo.weatherCode.toWeatherType()
+                    )
+                }
+            }.onErr {
+                _uiState.update {
+                    it.copy(
+                        isLoadingWeather = false,
+                        dialog = HomeDialog.AutoWeatherSettingsErrorDialog
+                    )
+                }
+            }
         }
     }
 }

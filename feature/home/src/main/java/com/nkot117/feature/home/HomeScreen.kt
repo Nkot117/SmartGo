@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -63,6 +64,7 @@ import com.nkot117.core.domain.model.WeatherType
 import com.nkot117.core.navigation.ChecklistScreenTransitionParams
 import com.nkot117.core.navigation.toNav
 import com.nkot117.core.ui.components.AppTopBar
+import com.nkot117.core.ui.components.CenterLoading
 import com.nkot117.core.ui.components.ChecklistPreviewRow
 import com.nkot117.core.ui.components.DatePickerField
 import com.nkot117.core.ui.components.PrimaryButton
@@ -100,20 +102,18 @@ fun HomeScreenRoute(
             )
         }
 
+        HomeDialog.AutoWeatherSettingsErrorDialog -> {
+            AutoWeatherSettingsErrorDialog(
+                onEvent = viewModel::onEvent
+            )
+        }
+
         null -> {
             // No dialog to show
         }
     }
 
     // 副作用
-    LaunchedEffect(state.dayType, state.weatherType, state.date) {
-        viewModel.getChecklist()
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.observeDailyNote()
-    }
-
     LaunchedEffect(Unit) {
         viewModel.uiEffect.collect { effect ->
             when (effect) {
@@ -195,6 +195,10 @@ private fun HomeScreen(
                 .widthIn(max = 360.dp)
                 .semantics { contentDescription = "go_to_checklist_button" }
         )
+    }
+
+    if (state.isLoadingWeather) {
+        CenterLoading()
     }
 }
 
@@ -422,6 +426,29 @@ private fun DailyNoteEditModal(draftNoteText: String, onEvent: (HomeUiEvent) -> 
             Spacer(modifier = Modifier.height(12.dp))
         }
     }
+}
+
+@Composable
+private fun AutoWeatherSettingsErrorDialog(onEvent: (HomeUiEvent) -> Unit) {
+    AlertDialog(
+        onDismissRequest = {
+            onEvent(DialogEvent.AutoWeatherSettingsErrorDialogDismissed)
+        },
+        title = {
+            Text("天気情報の取得に失敗しました")
+        },
+        text = {
+            Text("天気情報は手動で設定してください。")
+        },
+        confirmButton = {
+            PrimaryButton(
+                onClick = {
+                    onEvent(DialogEvent.AutoWeatherSettingsErrorDialogDismissed)
+                },
+                text = "OK"
+            )
+        }
+    )
 }
 
 @Preview(showBackground = true)

@@ -74,4 +74,8 @@ dependencies {
 
     // Icons
     implementation(libs.material.icons.core)
+
+    // Result
+    implementation(libs.kotlin.result)
+    implementation(libs.kotlin.result.coroutines)
 }
