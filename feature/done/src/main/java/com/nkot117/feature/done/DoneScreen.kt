@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -29,14 +28,9 @@ import androidx.compose.ui.unit.dp
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.rememberLottieComposition
-import com.nkot117.core.domain.model.DayType
 import com.nkot117.core.navigation.DoneScreenTransitionParams
-import com.nkot117.core.navigation.toDomain
 import com.nkot117.core.ui.components.PrimaryButton
-import com.nkot117.core.ui.theme.BgHolidayBottom
-import com.nkot117.core.ui.theme.BgHolidayTop
-import com.nkot117.core.ui.theme.BgWorkdayBottom
-import com.nkot117.core.ui.theme.BgWorkdayTop
+import com.nkot117.core.ui.theme.BackgroundColor
 import com.nkot117.core.ui.theme.SmartGoTheme
 
 @Composable
@@ -47,7 +41,6 @@ fun DoneScreenRoute(
 ) {
     DoneScreen(
         contentPadding = contentPadding,
-        dayType = params.dayType.toDomain(),
         checkedCount = params.checkedCount,
         totalCount = params.totalCount,
         onTapHome = onTapHome
@@ -57,20 +50,16 @@ fun DoneScreenRoute(
 @Composable
 fun DoneScreen(
     contentPadding: PaddingValues,
-    dayType: DayType,
     checkedCount: Int,
     totalCount: Int,
     onTapHome: () -> Unit
 ) {
-    val topColor = if (dayType == DayType.WORKDAY) BgWorkdayTop else BgHolidayTop
-    val bottomColor = if (dayType == DayType.WORKDAY) BgWorkdayBottom else BgHolidayBottom
-
     Box(
         Modifier
             .fillMaxSize()
             .padding(contentPadding)
             .background(
-                brush = Brush.verticalGradient(colors = listOf(topColor, bottomColor))
+                BackgroundColor
             )
     ) {
         val composition by rememberLottieComposition(
@@ -147,7 +136,6 @@ fun DoneScreenPreview_Workday() {
     SmartGoTheme {
         DoneScreen(
             contentPadding = PaddingValues(0.dp),
-            dayType = DayType.WORKDAY,
             onTapHome = {},
             checkedCount = 10,
             totalCount = 10
@@ -161,7 +149,6 @@ fun DoneScreenPreview_Holiday() {
     SmartGoTheme {
         DoneScreen(
             contentPadding = PaddingValues(0.dp),
-            dayType = DayType.HOLIDAY,
             onTapHome = {},
             checkedCount = 10,
             totalCount = 10

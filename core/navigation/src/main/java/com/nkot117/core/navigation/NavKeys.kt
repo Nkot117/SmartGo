@@ -31,11 +31,7 @@ data class ChecklistScreenTransitionParams(
 )
 
 @Serializable
-data class DoneScreenTransitionParams(
-    val dayType: NavDayType,
-    val checkedCount: Int,
-    val totalCount: Int
-)
+data class DoneScreenTransitionParams(val checkedCount: Int, val totalCount: Int)
 
 @Serializable
 enum class NavWeatherType { SUNNY, RAINY }

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,26 +25,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.nkot117.core.domain.model.DayType
 import com.nkot117.core.navigation.ChecklistScreenTransitionParams
 import com.nkot117.core.navigation.DoneScreenTransitionParams
 import com.nkot117.core.navigation.toDomain
-import com.nkot117.core.navigation.toNav
 import com.nkot117.core.ui.components.AppTopBar
 import com.nkot117.core.ui.components.ChecklistRow
 import com.nkot117.core.ui.components.PrimaryButton
 import com.nkot117.core.ui.components.SecondaryButton
-import com.nkot117.core.ui.theme.BgHolidayBottom
-import com.nkot117.core.ui.theme.BgHolidayTop
-import com.nkot117.core.ui.theme.BgWorkdayBottom
-import com.nkot117.core.ui.theme.BgWorkdayTop
+import com.nkot117.core.ui.theme.BackgroundColor
 import com.nkot117.core.ui.theme.ProgressActive
 import com.nkot117.core.ui.theme.ProgressComplete
 import com.nkot117.core.ui.theme.ProgressTrack
@@ -73,7 +68,6 @@ fun ChecklistScreenRoute(
 
     ChecklistScreen(
         contentPadding = contentPadding,
-        dayType = params.dayType.toDomain(),
         checklist = state.checklist,
         toggleChecklistItem = viewModel::toggleChecklistItem,
         onCheckAll = viewModel::checkAllItems,
@@ -82,36 +76,22 @@ fun ChecklistScreenRoute(
     )
 }
 
+@Suppress("LongParameterList")
 @Composable
 fun ChecklistScreen(
     contentPadding: PaddingValues,
-    dayType: DayType,
     checklist: List<ChecklistItem>,
     toggleChecklistItem: (id: Long, checked: Boolean) -> Unit,
     onCheckAll: () -> Unit,
     isAllChecked: Boolean,
     onTapDone: (params: DoneScreenTransitionParams) -> Unit
 ) {
-    val topColor = if (dayType == DayType.WORKDAY) {
-        BgWorkdayTop
-    } else {
-        BgHolidayTop
-    }
-
-    val bottomColor = if (dayType == DayType.WORKDAY) {
-        BgWorkdayBottom
-    } else {
-        BgHolidayBottom
-    }
-
     Box(
         Modifier
             .fillMaxSize()
             .padding(contentPadding)
             .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(topColor, bottomColor)
-                )
+                BackgroundColor
             )
     ) {
         LazyColumn(
@@ -149,7 +129,10 @@ fun ChecklistScreen(
             }
 
             // チェックリスト
-            items(checklist) { item ->
+            items(
+                items = checklist,
+                key = { item -> item.id }
+            ) { item ->
                 ChecklistRow(
                     title = item.title,
                     checked = item.checked,
@@ -170,7 +153,6 @@ fun ChecklistScreen(
             text = "出発する",
             onClick = {
                 val params = DoneScreenTransitionParams(
-                    dayType = dayType.toNav(),
                     checkedCount = checklist.size,
                     totalCount = checklist.filter {
                         it.checked
@@ -254,27 +236,36 @@ fun ChecklistProgressBar(progress: Float, modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .height(12.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(ProgressTrack)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(animatedProgress)
-                .background(barColor)
-        )
-    }
+            .drawBehind {
+                drawRoundRect(
+                    color = ProgressTrack,
+                    cornerRadius = CornerRadius(
+                        x = size.height / 2,
+                        y = size.height / 2
+                    )
+                )
+
+                drawRoundRect(
+                    color = barColor,
+                    size = size.copy(width = size.width * animatedProgress),
+                    cornerRadius = CornerRadius(
+                        x = size.height / 2,
+                        y = size.height / 2
+                    )
+                )
+            }
+    )
 }
 
-@Preview(showBackground = true, name = "Workday")
+@Preview(showBackground = true)
 @Composable
-private fun ChecklistScreenPreview_Workday() {
+private fun ChecklistScreenPreview() {
     SmartGoTheme {
         Scaffold(
             topBar = { AppTopBar("チェックリスト") }
         ) { inner ->
             ChecklistScreen(
                 contentPadding = inner,
-                dayType = DayType.WORKDAY,
                 checklist = listOf(
                     ChecklistItem(id = 1, title = "家の鍵", checked = true),
                     ChecklistItem(id = 2, title = "財布", checked = true),
@@ -285,30 +276,6 @@ private fun ChecklistScreenPreview_Workday() {
                 toggleChecklistItem = { _, _ -> },
                 onCheckAll = {},
                 isAllChecked = false,
-                onTapDone = {}
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true, name = "Holiday")
-@Composable
-private fun ChecklistScreenPreview_Holiday() {
-    SmartGoTheme {
-        Scaffold(
-            topBar = { AppTopBar("チェックリスト") }
-        ) { inner ->
-            ChecklistScreen(
-                contentPadding = inner,
-                dayType = DayType.HOLIDAY,
-                checklist = listOf(
-                    ChecklistItem(id = 1, title = "チケット", checked = true),
-                    ChecklistItem(id = 2, title = "イヤホン", checked = true),
-                    ChecklistItem(id = 3, title = "モバイルバッテリー", checked = true)
-                ),
-                toggleChecklistItem = { _, _ -> },
-                onCheckAll = {},
-                isAllChecked = true,
                 onTapDone = {}
             )
         }

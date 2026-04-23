@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew :core:domain:test --tests \"com.nkot117.core.domain.weather.*\")",
+      "Bash(grep -E \"\\\\.kt$\")"
+    ]
+  }
+}

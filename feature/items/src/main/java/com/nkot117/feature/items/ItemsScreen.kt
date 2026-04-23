@@ -25,12 +25,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
@@ -46,14 +44,15 @@ import com.nkot117.core.ui.components.ChecklistActionRow
 import com.nkot117.core.ui.components.DatePickerField
 import com.nkot117.core.ui.components.SecondaryButton
 import com.nkot117.core.ui.mapper.label
-import com.nkot117.core.ui.theme.BgWorkdayBottom
-import com.nkot117.core.ui.theme.BgWorkdayTop
+import com.nkot117.core.ui.theme.BackgroundColor
 import com.nkot117.core.ui.theme.Error300
 import com.nkot117.core.ui.theme.Primary500
 import com.nkot117.core.ui.theme.TextMain
 import com.nkot117.core.ui.theme.TextSub
 import java.time.LocalDate
 import java.time.ZoneOffset
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
 
 @Composable
 fun ItemsScreenRoute(contentPadding: PaddingValues, viewModel: ItemsViewModel = hiltViewModel()) {
@@ -68,10 +67,6 @@ fun ItemsScreenRoute(contentPadding: PaddingValues, viewModel: ItemsViewModel = 
         registerItem = viewModel::registerItem,
         deleteItem = viewModel::deleteItem
     )
-
-    LaunchedEffect(Unit) {
-        viewModel.observeRegisteredItemList()
-    }
 }
 
 @Composable
@@ -84,8 +79,6 @@ fun ItemsScreen(
     registerItem: () -> Unit,
     deleteItem: (Long) -> Unit
 ) {
-    val topColor = BgWorkdayTop
-    val bottomColor = BgWorkdayBottom
     val focusManager = LocalFocusManager.current
 
     Box(
@@ -93,9 +86,7 @@ fun ItemsScreen(
             .fillMaxSize()
             .padding(contentPadding)
             .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(topColor, bottomColor)
-                )
+                BackgroundColor
             )
     ) {
         Column(
@@ -110,50 +101,17 @@ fun ItemsScreen(
                     )
                 )
         ) {
-            val scroll = rememberScrollState()
-            Row(
-                modifier = Modifier.horizontalScroll(scroll),
-                horizontalArrangement = Arrangement.spacedBy(22.dp)
-            ) {
-                ItemCategory.entries.forEach { tag ->
-                    val isSelected = tag == state.category
-                    val textColor = if (isSelected) Primary500 else TextSub
-
-                    Column(
-                        modifier = Modifier
-                            .clickable { setCategory(tag) }
-                            .padding(vertical = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = tag.label(),
-                            color = textColor,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-
-                        Spacer(Modifier.height(6.dp))
-
-                        AnimatedVisibility(visible = isSelected) {
-                            Box(
-                                modifier = Modifier
-                                    .height(2.dp)
-                                    .width(24.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(Primary500)
-                            )
-                        }
-                    }
-                }
-            }
+            CategoryTabRow(
+                selectedCategory = state.category,
+                onSelectCategory = { setCategory(it) }
+            )
 
             Spacer(Modifier.height(20.dp))
 
             if (state.category == ItemCategory.DATE_SPECIFIC) {
                 DatePickerField(
                     selectedDateMillis = state.date.toEpochMillis(ZoneOffset.UTC),
-                    onDateChange = {
-                        setDate(it)
-                    },
+                    onDateChange = setDate,
                     confirmButtonLabel = "OK",
                     cancelButtonLabel = "キャンセル",
                     formLabel = "日付"
@@ -214,7 +172,10 @@ fun ItemsScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    items(state.itemList) { item ->
+                    items(
+                        items = state.itemList,
+                        key = { item -> item.id ?: item.name }
+                    ) { item ->
                         ChecklistActionRow(
                             title = item.name,
                             icon = Icons.Default.Delete,
@@ -228,6 +189,48 @@ fun ItemsScreen(
 
                         Spacer(modifier = Modifier.padding(top = 15.dp))
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryTabRow(
+    selectedCategory: ItemCategory,
+    onSelectCategory: (ItemCategory) -> Unit
+) {
+    val scroll = rememberScrollState()
+    Row(
+        modifier = Modifier.horizontalScroll(scroll),
+        horizontalArrangement = Arrangement.spacedBy(22.dp)
+    ) {
+        ItemCategory.entries.forEach { tag ->
+            val isSelected = tag == selectedCategory
+            val textColor = if (isSelected) Primary500 else TextSub
+
+            Column(
+                modifier = Modifier
+                    .clickable { onSelectCategory(tag) }
+                    .padding(vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = tag.label(),
+                    color = textColor,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                AnimatedVisibility(visible = isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .height(2.dp)
+                            .width(24.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Primary500)
+                    )
                 }
             }
         }
@@ -252,7 +255,7 @@ fun ItemsScreenPreview() {
     )
 }
 
-private fun previewRegisteredItems(): List<Item> = listOf(
+private fun previewRegisteredItems(): ImmutableList<Item> = persistentListOf(
     Item(id = 1L, name = "財布", category = ItemCategory.WORKDAY),
     Item(id = 2L, name = "家の鍵", category = ItemCategory.ALWAYS),
     Item(id = 3L, name = "スマホ", category = ItemCategory.RAINY),

@@ -29,6 +29,12 @@ fun SettingsDialogs(state: SettingsUiState, onEvent: (SettingsUiEvent) -> Unit) 
             )
         }
 
+        is SettingsDialog.LocationRequiredDialog -> {
+            LocationRequiredDialog(
+                onEvent = onEvent
+            )
+        }
+
         else -> {
             // No dialog to show
         }
@@ -90,6 +96,37 @@ private fun ExactAlarmRequiredDialog(onEvent: (SettingsUiEvent) -> Unit) {
             SecondaryButton(
                 onClick = {
                     onEvent(DialogEvent.ExactAlarmRequiredDialogDismissed)
+                },
+                text = "キャンセル"
+            )
+        }
+    )
+}
+
+@Composable
+private fun LocationRequiredDialog(onEvent: (SettingsUiEvent) -> Unit) {
+    AlertDialog(
+        onDismissRequest = {
+            onEvent(DialogEvent.LocationPermissionDialogDismissed)
+        },
+        title = {
+            Text("位置情報取得の許可が必要です")
+        },
+        text = {
+            Text("自動天気設定を利用するには、設定画面で位置情報の許可してください。")
+        },
+        confirmButton = {
+            PrimaryButton(
+                onClick = {
+                    onEvent(DialogEvent.LocationPermissionDialogConfirmed)
+                },
+                text = "設定を開く"
+            )
+        },
+        dismissButton = {
+            SecondaryButton(
+                onClick = {
+                    onEvent(DialogEvent.LocationPermissionDialogDismissed)
                 },
                 text = "キャンセル"
             )

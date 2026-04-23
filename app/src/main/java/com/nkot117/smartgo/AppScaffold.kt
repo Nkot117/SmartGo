@@ -48,7 +48,7 @@ fun AppScaffold() {
                 entry(AppNavKey.Home) {
                     HomeScreenRoute(
                         contentPadding = innerPadding,
-                        onTapCheckList = { checklistScreenTransitionParams ->
+                        transitionChecklistScreen = { checklistScreenTransitionParams ->
                             navigator.push(
                                 AppNavKey.Checklist(
                                     params = checklistScreenTransitionParams

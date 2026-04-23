@@ -1,7 +1,6 @@
 package com.nkot117.feature.home
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -27,6 +26,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -34,7 +34,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -44,11 +43,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
@@ -67,45 +64,70 @@ import com.nkot117.core.domain.model.WeatherType
 import com.nkot117.core.navigation.ChecklistScreenTransitionParams
 import com.nkot117.core.navigation.toNav
 import com.nkot117.core.ui.components.AppTopBar
+import com.nkot117.core.ui.components.CenterLoading
 import com.nkot117.core.ui.components.ChecklistPreviewRow
 import com.nkot117.core.ui.components.DatePickerField
 import com.nkot117.core.ui.components.PrimaryButton
 import com.nkot117.core.ui.components.SecondaryButton
 import com.nkot117.core.ui.components.SegmentOption
 import com.nkot117.core.ui.components.TwoOptionSegment
-import com.nkot117.core.ui.theme.BgHolidayBottom
-import com.nkot117.core.ui.theme.BgHolidayTop
-import com.nkot117.core.ui.theme.BgWorkdayBottom
-import com.nkot117.core.ui.theme.BgWorkdayTop
+import com.nkot117.core.ui.theme.BackgroundColor
 import com.nkot117.core.ui.theme.SmartGoTheme
 import com.nkot117.core.ui.theme.TextSub
 import java.time.ZoneOffset
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
 
 @Composable
 fun HomeScreenRoute(
     contentPadding: PaddingValues,
-    onTapCheckList: (params: ChecklistScreenTransitionParams) -> Unit,
+    transitionChecklistScreen: (params: ChecklistScreenTransitionParams) -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(state.dayType, state.weatherType, state.date) {
-        viewModel.getChecklist()
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.observeDailyNote()
-    }
-
+    // メインコンテンツの表示
     HomeScreen(
         contentPadding = contentPadding,
         state = state,
-        setDayType = viewModel::setDayType,
-        setWeatherType = viewModel::setWeatherType,
-        setDate = viewModel::setDate,
-        onTapCheckList = onTapCheckList,
-        saveDailyNote = viewModel::saveDailyNote
+        onEvent = viewModel::onEvent
     )
+
+    // ダイアログの表示
+    when (state.dialog) {
+        HomeDialog.DailyNoteEditDialog -> {
+            DailyNoteEditModal(
+                draftNoteText = state.dailyNote,
+                onEvent = viewModel::onEvent
+            )
+        }
+
+        HomeDialog.AutoWeatherSettingsErrorDialog -> {
+            AutoWeatherSettingsErrorDialog(
+                onEvent = viewModel::onEvent
+            )
+        }
+
+        null -> {
+            // No dialog to show
+        }
+    }
+
+    // 副作用
+    LaunchedEffect(Unit) {
+        viewModel.uiEffect.collect { effect ->
+            when (effect) {
+                HomeUiEffect.TransitionToChecklistScreen -> {
+                    val params = ChecklistScreenTransitionParams(
+                        dayType = state.dayType.toNav(),
+                        weatherType = state.weatherType.toNav(),
+                        date = state.date.toString()
+                    )
+                    transitionChecklistScreen(params)
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,27 +135,19 @@ fun HomeScreenRoute(
 private fun HomeScreen(
     contentPadding: PaddingValues,
     state: HomeUiState,
-    setDayType: (DayType) -> Unit,
-    setWeatherType: (WeatherType) -> Unit,
-    setDate: (Long) -> Unit,
-    onTapCheckList: (params: ChecklistScreenTransitionParams) -> Unit,
-    saveDailyNote: (String) -> Unit
+    onEvent: (HomeUiEvent) -> Unit
 ) {
-    val backgroundBrush = rememberDayTypeGradient(state.dayType)
-    var showEditNoteModal by remember { mutableStateOf(false) }
-    var draftNoteText by rememberSaveable { mutableStateOf("") }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val currentDailyNote = state.dailyNote
 
     Box(
         Modifier
             .fillMaxSize()
             .padding(contentPadding)
             .background(
-                brush = backgroundBrush
+                BackgroundColor
             )
     ) {
         LazyColumn(
-
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
                 start = 41.dp,
@@ -144,56 +158,15 @@ private fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // 日付選択
-                    DatePickerField(
-                        selectedDateMillis = state.date.toEpochMillis(ZoneOffset.UTC),
-                        onDateChange = {
-                            setDate(it)
-                        },
-                        confirmButtonLabel = "OK",
-                        cancelButtonLabel = "キャンセル",
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Spacer(modifier = Modifier.width(20.dp))
-
-                    // 天気アイコン
-                    WeatherIcon(weatherType = state.weatherType)
-                }
-
-                Spacer(modifier = Modifier.padding(top = 15.dp))
-
-                // Work / Holiday 選択
-                TwoOptionSegment(
-                    left = SegmentOption(DayType.WORKDAY, "仕事の日"),
-                    right = SegmentOption(DayType.HOLIDAY, "休みの日"),
-                    selected = state.dayType,
-                    onSelectedChange = { setDayType(it) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.padding(top = 15.dp))
-
-                // Sunny / Rainy 選択
-                TwoOptionSegment(
-                    left = SegmentOption(WeatherType.SUNNY, "晴れの日"),
-                    right = SegmentOption(WeatherType.RAINY, "雨の日"),
-                    selected = state.weatherType,
-                    onSelectedChange = { setWeatherType(it) },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                ConditionSection(state = state, onEvent = onEvent)
 
                 Spacer(modifier = Modifier.padding(top = 15.dp))
 
                 // 今日のノート
                 DailyNoteCard(
-                    text = state.dailyNote,
+                    text = currentDailyNote,
                     onClick = {
-                        draftNoteText = state.dailyNote
-                        showEditNoteModal = true
+                        onEvent(ClickEvent.DailyNoteClicked)
                     }
                 )
 
@@ -210,14 +183,7 @@ private fun HomeScreen(
         PrimaryButton(
             text = "チェックリストへ",
             onClick = {
-                val params = ChecklistScreenTransitionParams(
-                    dayType = state.dayType.toNav(),
-                    weatherType = state.weatherType.toNav(),
-                    date = state.date.toString()
-                )
-                onTapCheckList(
-                    params
-                )
+                onEvent(ClickEvent.ChecklistClicked)
             },
             enabled = state.preview.isNotEmpty(),
             modifier = Modifier
@@ -231,20 +197,13 @@ private fun HomeScreen(
         )
     }
 
-    // 今日のノート編集モーダル
-    if (showEditNoteModal) {
-        DailyNoteEditModal(
-            sheetState = sheetState,
-            draftNoteText = draftNoteText,
-            editNoteText = { draftNoteText = it },
-            saveDailyNote = saveDailyNote,
-            onDismissRequest = { showEditNoteModal = it }
-        )
+    if (state.isLoadingWeather) {
+        CenterLoading()
     }
 }
 
 @Composable
-private fun ItemPreview(previewList: List<Item>) {
+private fun ItemPreview(previewList: ImmutableList<Item>) {
     Box(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -274,15 +233,65 @@ private fun ItemPreview(previewList: List<Item>) {
                 )
             } else {
                 previewList.forEach {
-                    ChecklistPreviewRow(
-                        title = it.name
-                    )
-
-                    Spacer(modifier = Modifier.padding(top = 15.dp))
+                    key(it.id) {
+                        ChecklistPreviewRow(
+                            title = it.name
+                        )
+                        Spacer(modifier = Modifier.padding(top = 15.dp))
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun ConditionSection(state: HomeUiState, onEvent: (HomeUiEvent) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 日付選択
+        DatePickerField(
+            selectedDateMillis = state.date.toEpochMillis(ZoneOffset.UTC),
+            onDateChange = {
+                onEvent(DialogEvent.CalendarDialogConfirmed(it))
+            },
+            confirmButtonLabel = "OK",
+            cancelButtonLabel = "キャンセル",
+            modifier = Modifier.weight(1f)
+        )
+
+        Spacer(modifier = Modifier.width(20.dp))
+
+        // 天気アイコン
+        WeatherIcon(weatherType = state.weatherType)
+    }
+
+    Spacer(modifier = Modifier.padding(top = 15.dp))
+
+    // Work / Holiday 選択
+    TwoOptionSegment(
+        left = SegmentOption(DayType.WORKDAY, "仕事の日"),
+        right = SegmentOption(DayType.HOLIDAY, "休みの日"),
+        selected = state.dayType,
+        onSelectedChange = {
+            onEvent(ClickEvent.DailyTypeToggled(it))
+        },
+        modifier = Modifier.fillMaxWidth()
+    )
+
+    Spacer(modifier = Modifier.padding(top = 15.dp))
+
+    // Sunny / Rainy 選択
+    TwoOptionSegment(
+        left = SegmentOption(WeatherType.SUNNY, "晴れの日"),
+        right = SegmentOption(WeatherType.RAINY, "雨の日"),
+        selected = state.weatherType,
+        onSelectedChange = {
+            onEvent(ClickEvent.WeatherTypeToggled(it))
+        },
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 @Composable
@@ -314,39 +323,6 @@ private fun DailyNoteCard(text: String, onClick: () -> Unit) {
                 maxLines = 4
             )
         }
-    }
-}
-
-@Composable
-private fun rememberDayTypeGradient(dayType: DayType): Brush {
-    val topColor by animateColorAsState(
-        targetValue = if (dayType == DayType.WORKDAY) {
-            BgWorkdayTop
-        } else {
-            BgHolidayTop
-        },
-        animationSpec = tween(
-            durationMillis = 600,
-            easing = FastOutSlowInEasing
-        ),
-        label = "bg_top"
-    )
-
-    val bottomColor by animateColorAsState(
-        targetValue = if (dayType == DayType.WORKDAY) {
-            BgWorkdayBottom
-        } else {
-            BgHolidayBottom
-        },
-        animationSpec = tween(
-            durationMillis = 600,
-            easing = FastOutSlowInEasing
-        ),
-        label = "bg_bottom"
-    )
-
-    return remember(topColor, bottomColor) {
-        Brush.verticalGradient(listOf(topColor, bottomColor))
     }
 }
 
@@ -394,15 +370,14 @@ private fun WeatherIcon(weatherType: WeatherType) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DailyNoteEditModal(
-    sheetState: SheetState,
-    draftNoteText: String,
-    editNoteText: (String) -> Unit,
-    saveDailyNote: (String) -> Unit,
-    onDismissRequest: (Boolean) -> Unit
-) {
+private fun DailyNoteEditModal(draftNoteText: String, onEvent: (HomeUiEvent) -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var draftNoteText by remember { mutableStateOf(draftNoteText) }
+
     ModalBottomSheet(
-        onDismissRequest = { onDismissRequest(false) },
+        onDismissRequest = {
+            onEvent(DialogEvent.DailyNoteEditDialogDismissed)
+        },
         sheetState = sheetState
     ) {
         Column(
@@ -419,7 +394,7 @@ private fun DailyNoteEditModal(
 
             OutlinedTextField(
                 value = draftNoteText,
-                onValueChange = { editNoteText(it) },
+                onValueChange = { draftNoteText = it },
                 minLines = 4,
                 placeholder = {
                     Text("例：ティッシュ切れてるので帰りに買う")
@@ -435,7 +410,7 @@ private fun DailyNoteEditModal(
             ) {
                 SecondaryButton(
                     text = "キャンセル",
-                    onClick = { onDismissRequest(false) }
+                    onClick = { onEvent(DialogEvent.DailyNoteEditDialogDismissed) }
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -443,8 +418,7 @@ private fun DailyNoteEditModal(
                 PrimaryButton(
                     text = "保存",
                     onClick = {
-                        saveDailyNote(draftNoteText)
-                        onDismissRequest(false)
+                        onEvent(DialogEvent.DailyNoteEditDialogConfirmed(draftNoteText))
                     },
                     enabled = draftNoteText.isNotBlank()
                 )
@@ -452,6 +426,29 @@ private fun DailyNoteEditModal(
             Spacer(modifier = Modifier.height(12.dp))
         }
     }
+}
+
+@Composable
+private fun AutoWeatherSettingsErrorDialog(onEvent: (HomeUiEvent) -> Unit) {
+    AlertDialog(
+        onDismissRequest = {
+            onEvent(DialogEvent.AutoWeatherSettingsErrorDialogDismissed)
+        },
+        title = {
+            Text("天気情報の取得に失敗しました")
+        },
+        text = {
+            Text("天気情報は手動で設定してください。")
+        },
+        confirmButton = {
+            PrimaryButton(
+                onClick = {
+                    onEvent(DialogEvent.AutoWeatherSettingsErrorDialogDismissed)
+                },
+                text = "OK"
+            )
+        }
+    )
 }
 
 @Preview(showBackground = true)
@@ -472,7 +469,7 @@ private fun HomeScreenPreview() {
             HomeScreen(
                 contentPadding = inner,
                 state = HomeUiState(
-                    preview = listOf(
+                    preview = persistentListOf(
                         Item(
                             name = "家の鍵",
                             category = ItemCategory.ALWAYS
@@ -495,11 +492,7 @@ private fun HomeScreenPreview() {
                         )
                     )
                 ),
-                setDayType = {},
-                setWeatherType = {},
-                setDate = {},
-                onTapCheckList = {},
-                saveDailyNote = {}
+                onEvent = {}
             )
         }
     }

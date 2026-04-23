@@ -8,6 +8,7 @@ import com.nkot117.core.domain.model.Reminder
  */
 data class SettingsUiState(
     val reminder: Reminder = Reminder(9, 0, false),
+    val autoWeatherSettings: Boolean = false,
     val dialog: SettingsDialog? = null
 )
 
@@ -18,6 +19,7 @@ sealed interface SettingsDialog {
     data object ReminderTimePicker : SettingsDialog
     data object NotificationRequiredDialog : SettingsDialog
     data object ExactAlarmRequiredDialog : SettingsDialog
+    data object LocationRequiredDialog : SettingsDialog
 }
 
 /**
@@ -45,6 +47,13 @@ sealed interface ReminderEvent : SettingsUiEvent {
 }
 
 /**
+ * 自動天気設定イベント
+ */
+sealed interface AutoWeatherSettingsEvent : SettingsUiEvent {
+    data class AutoWeatherToggled(val enabled: Boolean) : AutoWeatherSettingsEvent
+}
+
+/**
  * ダイアログイベント
  */
 sealed interface DialogEvent : SettingsUiEvent {
@@ -52,6 +61,8 @@ sealed interface DialogEvent : SettingsUiEvent {
     data object NotificationRequiredDialogDismissed : DialogEvent
     data object ExactAlarmRequiredDialogConfirmed : DialogEvent
     data object ExactAlarmRequiredDialogDismissed : DialogEvent
+    data object LocationPermissionDialogConfirmed : DialogEvent
+    data object LocationPermissionDialogDismissed : DialogEvent
 }
 
 /**
@@ -60,6 +71,7 @@ sealed interface DialogEvent : SettingsUiEvent {
 sealed interface PermissionEvent : SettingsUiEvent {
     data class PostNotifications(val granted: Boolean) : PermissionEvent
     data class ExactAlarm(val granted: Boolean) : PermissionEvent
+    data class Location(val granted: Boolean) : PermissionEvent
 }
 
 /**
@@ -70,6 +82,8 @@ sealed class SettingsUiEffect {
     data object OpenOssLicenses : SettingsUiEffect()
     data object OpenNotificationSettings : SettingsUiEffect()
     data object OpenExactAlarmSettings : SettingsUiEffect()
+    data object OpenLocationSettings : SettingsUiEffect()
     data object RequestPostNotificationsPermission : SettingsUiEffect()
     data object RequestExactAlarmPermission : SettingsUiEffect()
+    data object RequestLocationPermission : SettingsUiEffect()
 }

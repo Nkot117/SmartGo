@@ -12,4 +12,6 @@ dependencies {
     implementation(libs.javax.inject)
 
     testImplementation(project(":core:test"))
+
+    implementation(libs.kotlin.result)
 }
