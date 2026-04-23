@@ -12,6 +12,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import java.time.LocalDate
+import kotlinx.coroutines.flow.first
 
 class GetItemsToBringUseCaseTest :
     FunSpec({
@@ -59,7 +60,7 @@ class GetItemsToBringUseCaseTest :
                     dayType = DayType.WORKDAY,
                     weatherType = WeatherType.SUNNY,
                     date = LocalDate.of(2026, 2, 1)
-                )
+                ).first()
 
             // Assert
             val alwaysItems = result.filter { it.category == ItemCategory.ALWAYS }
@@ -82,7 +83,7 @@ class GetItemsToBringUseCaseTest :
                         dayType = DayType.WORKDAY,
                         weatherType = WeatherType.SUNNY,
                         date = LocalDate.of(2026, 2, 1)
-                    )
+                    ).first()
             }
 
             test("「勤務日」カテゴリのアイテムが返却されること") {
@@ -106,7 +107,7 @@ class GetItemsToBringUseCaseTest :
                         dayType = DayType.HOLIDAY,
                         weatherType = WeatherType.SUNNY,
                         date = LocalDate.of(2026, 2, 1)
-                    )
+                    ).first()
             }
 
             test("「勤務日」カテゴリのアイテムが返却されないこと") {
@@ -130,7 +131,7 @@ class GetItemsToBringUseCaseTest :
                         dayType = DayType.WORKDAY,
                         weatherType = WeatherType.RAINY,
                         date = LocalDate.of(2026, 2, 1)
-                    )
+                    ).first()
             }
 
             test("「雨」カテゴリのアイテムが返却されること") {
@@ -154,7 +155,7 @@ class GetItemsToBringUseCaseTest :
                         dayType = DayType.WORKDAY,
                         weatherType = WeatherType.SUNNY,
                         date = LocalDate.of(2026, 2, 1)
-                    )
+                    ).first()
             }
             test("「雨」カテゴリのアイテムが返却されないこと") {
                 // Assert
@@ -178,7 +179,7 @@ class GetItemsToBringUseCaseTest :
                         dayType = DayType.WORKDAY,
                         weatherType = WeatherType.SUNNY,
                         date = LocalDate.of(2026, 2, 1)
-                    )
+                    ).first()
             }
 
             test("DATE_SPECIFICはid=6のみが含まれること") {

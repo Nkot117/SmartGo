@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -108,18 +107,16 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeChecklist() {
         viewModelScope.launch {
             uiState
                 .map { Triple(it.dayType, it.weatherType, it.date) }
                 .distinctUntilChanged()
-                .collectLatest {
-                    val (dayType, weatherType, date) = it
-                    val items = getItemsToBringUseCase(
-                        dayType = dayType,
-                        weatherType = weatherType,
-                        date = date
-                    )
+                .flatMapLatest { (dayType, weatherType, date) ->
+                    getItemsToBringUseCase(dayType, weatherType, date)
+                }
+                .collect { items ->
                     _uiState.update { state -> state.copy(preview = items.toImmutableList()) }
                 }
         }
