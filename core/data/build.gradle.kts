@@ -70,4 +70,8 @@ dependencies {
     // Play Services Location
     implementation(libs.play.services.location)
     implementation(libs.kotlinx.coroutines.play.services)
+
+    // Result
+    implementation(libs.kotlin.result)
+    implementation(libs.kotlin.result.coroutines)
 }
