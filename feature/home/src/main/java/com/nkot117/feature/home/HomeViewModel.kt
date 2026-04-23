@@ -2,6 +2,8 @@ package com.nkot117.feature.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.github.michaelbull.result.onErr
+import com.github.michaelbull.result.onOk
 import com.nkot117.core.common.toLocalDate
 import com.nkot117.core.domain.model.DayType
 import com.nkot117.core.domain.model.WeatherType
@@ -10,6 +12,7 @@ import com.nkot117.core.domain.usecase.dailynote.SaveDailyNoteUseCase
 import com.nkot117.core.domain.usecase.items.GetItemsToBringUseCase
 import com.nkot117.core.domain.usecase.weather.GetAutoWeatherSettingsUseCase
 import com.nkot117.core.domain.usecase.weather.GetCurrentLocationDailyWeatherTypeUseCase
+import com.nkot117.core.domain.usecase.weather.toWeatherType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.collections.immutable.toImmutableList
@@ -97,7 +100,8 @@ class HomeViewModel @Inject constructor(
             }
 
             DialogEvent.CalendarDialogDismissed,
-            DialogEvent.DailyNoteEditDialogDismissed
+            DialogEvent.DailyNoteEditDialogDismissed,
+            DialogEvent.AutoWeatherSettingsErrorDialogDismissed
             -> _uiState.update {
                 it.copy(dialog = null)
             }
@@ -155,11 +159,18 @@ class HomeViewModel @Inject constructor(
             if (!autoWeatherEnabled) return@launch
 
             _uiState.update { it.copy(isLoadingWeather = true) }
-            getCurrentLocationDailyWeatherTypeUseCase().let {
-                _uiState.update { state ->
-                    state.copy(
+            getCurrentLocationDailyWeatherTypeUseCase().onOk { dailyWeatherInfo ->
+                _uiState.update {
+                    it.copy(
                         isLoadingWeather = false,
-                        weatherType = it
+                        weatherType = dailyWeatherInfo.weatherCode.toWeatherType()
+                    )
+                }
+            }.onErr {
+                _uiState.update {
+                    it.copy(
+                        isLoadingWeather = false,
+                        dialog = HomeDialog.AutoWeatherSettingsErrorDialog
                     )
                 }
             }

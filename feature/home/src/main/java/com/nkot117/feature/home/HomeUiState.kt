@@ -12,7 +12,6 @@ import kotlinx.collections.immutable.persistentListOf
  */
 data class HomeUiState(
     val isLoadingWeather: Boolean = false,
-    val weatherErrorMessage: String? = null,
     val date: LocalDate = LocalDate.now(),
     val dayType: DayType = DayType.WORKDAY,
     val weatherType: WeatherType = WeatherType.SUNNY,
@@ -26,6 +25,7 @@ data class HomeUiState(
  */
 sealed class HomeDialog {
     data object DailyNoteEditDialog : HomeDialog()
+    data object AutoWeatherSettingsErrorDialog : HomeDialog()
 }
 
 /**
@@ -51,6 +51,7 @@ sealed interface DialogEvent : HomeUiEvent {
     data object DailyNoteEditDialogDismissed : DialogEvent
     data class CalendarDialogConfirmed(val selectedDate: Long) : DialogEvent
     data object CalendarDialogDismissed : DialogEvent
+    data object AutoWeatherSettingsErrorDialogDismissed : DialogEvent
 }
 
 /**

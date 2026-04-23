@@ -26,7 +26,7 @@ class GetCurrentLocationDailyWeatherTypeUseCase @Inject constructor(
     }
 }
 
-private fun Int.toWeatherType(): WeatherType = when (this) {
+fun Int.toWeatherType(): WeatherType = when (this) {
     0, 1, 2 -> WeatherType.SUNNY
     else -> WeatherType.RAINY
 }
